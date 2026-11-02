@@ -563,10 +563,12 @@ update_subscription() {
 	log "Profile" "Update subscription: $subscription_name."
 	local success
 	# unique temporary files, so concurrent updates (scheduled and manual) of the same subscription do not share them
-	mkdir -p "$TEMP_DIR"
-	local subscription_info_header_tmpfile; subscription_info_header_tmpfile=$(mktemp "$TEMP_DIR/$subscription_section.info.header.XXXXXX")
-	local subscription_header_tmpfile; subscription_header_tmpfile=$(mktemp "$TEMP_DIR/$subscription_section.header.XXXXXX")
-	local subscription_tmpfile; subscription_tmpfile=$(mktemp "$TEMP_DIR/$subscription_section.yaml.XXXXXX")
+	mkdir -p "$TEMP_DIR" || return 1
+	local subscription_tmpdir; subscription_tmpdir=$(mktemp -d "$TEMP_DIR/$subscription_section.XXXXXX") || return 1
+	local subscription_info_header_tmpfile; subscription_info_header_tmpfile="$subscription_tmpdir/info.header"
+	local subscription_header_tmpfile; subscription_header_tmpfile="$subscription_tmpdir/header"
+	# Download beside the cache so the final rename stays on the same filesystem.
+	local subscription_tmpfile; subscription_tmpfile=$(mktemp "$SUBSCRIPTIONS_DIR/.$subscription_section.XXXXXX") || { rmdir "$subscription_tmpdir"; return 1; }
 	local subscription_info_file
 	local subscription_file; subscription_file="$SUBSCRIPTIONS_DIR/$subscription_section.yaml"
 	# fetch subscription info
@@ -595,6 +597,10 @@ update_subscription() {
 		fi
 	else
 		log "Profile" "Subscription download failed."
+		success=0
+	fi
+	# Preserve cached data and usage information if publishing the download fails.
+	if [ "$success" = 1 ] && ! { chmod 644 "$subscription_tmpfile" && mv -f "$subscription_tmpfile" "$subscription_file"; }; then
 		success=0
 	fi
 	# check if success
@@ -641,19 +647,13 @@ update_subscription() {
 		fi
 		uci_set "nikki" "$subscription_section" "update" "$(date "+%Y-%m-%d %H:%M:%S")"
 		uci_set "nikki" "$subscription_section" "success" "1"
-		# update subscription file
-		rm -f "$subscription_info_header_tmpfile"
-		rm -f "$subscription_header_tmpfile"
-		chmod 644 "$subscription_tmpfile"
-		mv -f "$subscription_tmpfile" "$subscription_file"
 	elif [ "$success" = 0 ]; then
 		log "Profile" "Subscription update failed."
 		# update subscription info
 		uci_set "nikki" "$subscription_section" "success" "0"
-		# remove tmpfile
-		rm -f "$subscription_info_header_tmpfile"
-		rm -f "$subscription_header_tmpfile"
-		rm -f "$subscription_tmpfile"
 	fi
-	uci_commit "nikki"
+	rm -f "$subscription_info_header_tmpfile" "$subscription_header_tmpfile" "$subscription_tmpfile"
+	rmdir "$subscription_tmpdir"
+	uci_commit "nikki" || return 1
+	[ "$success" = 1 ]
 }

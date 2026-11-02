@@ -36,11 +36,14 @@ tun_device=$(yq -M "(.tun | select(.enable) | .device) // (.listeners[] | select
 (
 	while [ "$tun_timeout" -gt 0 ]; do
 		if ip -j link show dev "$tun_device" 2>/dev/null | jsonfilter -q -e "@[@['flags'][@='UP']]" > /dev/null 2>&1; then
-			if [ "$ipv4_proxy" = 1 ]; then
-				ip -4 route replace unicast default dev "$tun_device" table "$tun_route_table"
+			# A stop or reload may have removed the routing state while we waited.
+			[ -f "$STARTED_FLAG_PATH" ] || exit 0
+			[ -n "$(ip -4 rule list table "$tun_route_table")$(ip -6 rule list table "$tun_route_table")" ] || exit 0
+			if [ "$ipv4_proxy" = 1 ] && [ -n "$(ip -4 rule list table "$tun_route_table")" ]; then
+				ip -4 route replace unicast default dev "$tun_device" table "$tun_route_table" || { log "Proxy" "Failed to restore IPv4 TUN route."; exit 1; }
 			fi
-			if [ "$ipv6_proxy" = 1 ]; then
-				ip -6 route replace unicast default dev "$tun_device" table "$tun_route_table"
+			if [ "$ipv6_proxy" = 1 ] && [ -n "$(ip -6 rule list table "$tun_route_table")" ]; then
+				ip -6 route replace unicast default dev "$tun_device" table "$tun_route_table" || { log "Proxy" "Failed to restore IPv6 TUN route."; exit 1; }
 			fi
 			log "Proxy" "TUN device is recreated, routes restored."
 			exit 0
