@@ -1,14 +1,20 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mihomo-meta
+# Pinned fallback when the latest stable release cannot be queried or downloaded.
 PKG_VERSION:=1.19.33
+PKG_SOURCE_VERSION:=v1.19.33
+PKG_MIRROR_HASH:=8adee049a9c1f653b9c52fbf20fec74da56288961f857289d540193f38c0fa44
+PKG_BUILD_VERSION:=v1.19.33
+
+MIHOMO_META_SELECTION:=$(TOPDIR)/tmp/mihomo-meta-selected.mk
+$(shell python3 $(CURDIR)/latest.py --cached --output "$(MIHOMO_META_SELECTION)" --download-dir "$(DL_DIR)" >&2)
+include $(MIHOMO_META_SELECTION)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/MetaCubeX/mihomo.git
-PKG_SOURCE_VERSION:=v1.19.33
-PKG_MIRROR_HASH:=8adee049a9c1f653b9c52fbf20fec74da56288961f857289d540193f38c0fa44
 
 PKG_LICENSE:=GPL3.0+
 PKG_MAINTAINER:=Joseph Mory <morytyann@gmail.com>
@@ -17,7 +23,6 @@ PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
-PKG_BUILD_VERSION:=v1.19.33
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_BUILD_TIME:=$(shell date -u -Iseconds)
 
